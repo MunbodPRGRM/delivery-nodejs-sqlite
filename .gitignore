@@ -24,6 +24,8 @@ yarn-error.log*
 # แต่ถ้าทำงานเป็นทีม แนะนำให้ใส่ไว้ เพื่อไม่ให้ข้อมูลของแต่ละคนตีกัน
 /delivery.db
 
+/uploads
+
 # OS generated files
 .DS_Store
 Thumbs.db

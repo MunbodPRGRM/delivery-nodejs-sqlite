@@ -1,3 +1,42 @@
+# Dependencies
+# โฟลเดอร์ที่เก็บ library ทั้งหมดที่ npm ติดตั้งให้ ไม่จำเป็นต้องเก็บเพราะสามารถติดตั้งใหม่ได้จากไฟล์ package.json
 /node_modules
 
-/.env
+# Logs
+# ไฟล์ log ที่ถูกสร้างขึ้นระหว่างการรันโปรแกรม
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment Variables
+# ไฟล์ที่ใช้เก็บข้อมูลสำคัญ เช่น รหัสผ่าน, API Keys ไม่ควรเก็บไว้ใน Git โดยเด็ดขาด
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database
+# ไฟล์ฐานข้อมูล SQLite ที่ถูกสร้างขึ้น
+# หากทำงานคนเดียวและอยากเก็บข้อมูลทดสอบไว้ใน git ด้วย ก็ไม่ต้องใส่บรรทัดนี้
+# แต่ถ้าทำงานเป็นทีม แนะนำให้ใส่ไว้ เพื่อไม่ให้ข้อมูลของแต่ละคนตีกัน
+/delivery.db
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build output
+/dist
+/build

@@ -22,7 +22,7 @@ app.use("/users", userRoutes);
 app.use("/riders", riderRoutes);
 
 app.use('/uploads', express.static('uploads'));
-app.use('/api/uploads', uploadRoutes);
+app.use('/upload', uploadRoutes);
 
 // ===== Export ตัวแปร app ออกไป =====
 module.exports = app;

@@ -81,8 +81,80 @@ const loginUser = (req, res) => {
     });
 };
 
+const addAddress = (req, res) => {
+    // 1. รับข้อมูลจาก Flutter (locationName คือที่อยู่ที่แปลงแล้ว)
+    const { userId, locationName, gpsCoordinates } = req.body;
+
+    if (!userId || !locationName || !gpsCoordinates) {
+        return res.status(400).json({ error: "กรุณาส่งข้อมูลให้ครบ (userId, locationName, gpsCoordinates)" });
+    }
+
+    // 2. แยกค่า gpsCoordinates (จาก "lat,lng")
+    const coords = gpsCoordinates.split(',');
+    if (coords.length !== 2) {
+        return res.status(400).json({ error: "รูปแบบ gpsCoordinates ไม่ถูกต้อง (ต้องเป็น 'lat,lng')" });
+    }
+
+    const latitude = parseFloat(coords[0]);
+    const longitude = parseFloat(coords[1]);
+    const parsedUserId = parseInt(userId, 10); // แปลง userId (String) เป็น Integer
+
+    if (isNaN(latitude) || isNaN(longitude) || isNaN(parsedUserId)) {
+         return res.status(400).json({ error: "ข้อมูล userId, lat, หรือ lng ไม่ถูกต้อง" });
+    }
+
+    // 3. สร้าง SQL ให้ตรงกับ Schema ใหม่
+    // เราจะไม่ใส่ 'id' เพราะมันเป็น AUTOINCREMENT
+    const sql = `INSERT INTO addresses (user_id, address, latitude, longitude)
+                 VALUES (?, ?, ?, ?)`;
+    
+    const params = [parsedUserId, locationName, latitude, longitude];
+
+    // 4. รันคำสั่ง SQL
+    db.run(sql, params, function(err) {
+        if (err) {
+            return res.status(500).json({ error: "Database error: " + err.message });
+        }
+
+        // 5. ส่งข้อมูลที่บันทึกสำเร็จกลับไป (พร้อม ID ใหม่)
+        res.status(201).json({
+            message: "บันทึกที่อยู่สำเร็จ",
+            address: {
+                id: this.lastID, // 'this.lastID' คือ id ที่ถูกสร้างอัตโนมัติ
+                user_id: parsedUserId,
+                address: locationName,
+                latitude: latitude,
+                longitude: longitude
+            }
+        });
+    });
+};
+
+const getAddresses = (req, res) => {
+    // รับ userId จาก query string (เช่น /users/address?userId=1)
+    const { userId } = req.query;
+
+    if (!userId) {
+        return res.status(400).json({ error: "กรุณาระบุ userId" });
+    }
+
+    // ใช้ Schema ใหม่ (id, user_id, address, ...)
+    const sql = `SELECT * FROM addresses WHERE user_id = ?`;
+    
+    // db.all คือการดึงข้อมูลทั้งหมดที่ตรงเงื่อนไข (คืนค่าเป็น Array)
+    db.all(sql, [parseInt(userId, 10)], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: "Database error: " + err.message });
+        }
+        
+        // ส่งข้อมูลที่อยู่ (Array) กลับไปให้ Flutter
+        res.status(200).json(rows);
+    });
+};
 
 module.exports = {
     registerUser,
     loginUser,
+    addAddress,
+    getAddresses,
 };

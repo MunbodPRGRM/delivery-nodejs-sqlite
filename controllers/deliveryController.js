@@ -44,4 +44,50 @@ const createDelivery = (req, res) => {
     });
 };
 
-module.exports = createDelivery;
+const getSentDeliveries = (req, res) => {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    // เราจะ JOIN ตาราง users เพื่อเอา "ชื่อผู้รับ"
+    const sql = `
+        SELECT 
+            d.id, d.status, d.item_description, 
+            u.name as receiver_name 
+        FROM deliveries d
+        JOIN users u ON d.receiver_id = u.id
+        WHERE d.sender_id = ?
+        ORDER BY d.id DESC
+    `;
+    
+    db.all(sql, [parseInt(userId, 10)], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(200).json(rows);
+    });
+};
+
+const getReceivedDeliveries = (req, res) => {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    // เราจะ JOIN ตาราง users เพื่อเอา "ชื่อผู้ส่ง"
+    const sql = `
+        SELECT 
+            d.id, d.status, d.item_description,
+            u.name as sender_name
+        FROM deliveries d
+        JOIN users u ON d.sender_id = u.id
+        WHERE d.receiver_id = ?
+        ORDER BY d.id DESC
+    `;
+
+    db.all(sql, [parseInt(userId, 10)], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(200).json(rows);
+    });
+};
+
+module.exports = {
+    createDelivery,
+    getSentDeliveries,
+    getReceivedDeliveries
+};

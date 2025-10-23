@@ -8,6 +8,7 @@ const db = require("./db/database"); // นำเข้า DB connection
 const userRoutes = require("./routes/userRoute");
 const riderRoutes = require("./routes/riderRoute");
 const uploadRoutes = require('./routes/uploadRoute');
+const deliveryRoutes = require('./routes/deliveryRoute');
 
 // ===== สร้าง Express App =====
 const app = express();
@@ -20,6 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 // ===== Routing =====
 app.use("/users", userRoutes);
 app.use("/riders", riderRoutes);
+app.use("/deliveries", deliveryRoutes);
 
 app.use('/uploads', express.static('uploads'));
 app.use('/upload', uploadRoutes);

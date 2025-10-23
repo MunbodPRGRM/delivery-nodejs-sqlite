@@ -86,8 +86,67 @@ const getReceivedDeliveries = (req, res) => {
     });
 };
 
+const getAvailableDeliveries = (req, res) => {
+    // เรา JOIN กับ 'addresses' เพื่อเอาจุดหมายปลายทาง (address)
+    // และ JOIN กับ 'users' เพื่อเอาชื่อผู้ส่ง
+    const sql = `
+        SELECT 
+            d.id, d.photo_status1,
+            a.address as destination_address,
+            u.name as sender_name,
+            d.item_description
+        FROM deliveries d
+        JOIN addresses a ON d.receiver_address_id = a.id
+        JOIN users u ON d.sender_id = u.id
+        WHERE d.status = 1 AND d.rider_id IS NULL
+        ORDER BY d.id DESC
+    `;
+    
+    db.all(sql, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(200).json(rows);
+    });
+};
+
+const acceptDelivery = (req, res) => {
+    const { id } = req.params; // ID ของ Delivery
+    const { riderId } = req.body; // ID ของ Rider ที่กดรับ
+
+    if (!riderId) {
+        return res.status(400).json({ error: 'Missing riderId' });
+    }
+
+    // อัปเดต status เป็น 2 (ไรเดอร์รับงาน) และใส่ rider_id
+    // ❗️ เราเช็ค `status = 1 AND rider_id IS NULL` เพื่อป้องกันการรับงานซ้ำซ้อน (Race Condition)
+    const sql = `
+        UPDATE deliveries 
+        SET status = 2, rider_id = ?
+        WHERE id = ? AND status = 1 AND rider_id IS NULL
+    `;
+
+    db.run(sql, [parseInt(riderId, 10), parseInt(id, 10)], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        
+        // ตรวจสอบว่ามีแถวที่ถูกอัปเดตจริงหรือไม่
+        if (this.changes === 0) {
+            // ถ้าเป็น 0 แปลว่างานนี้ถูกคนอื่นรับไปแล้ว
+            return res.status(400).json({ error: 'Job not available or already taken' });
+        }
+        
+        // ถ้ารับสำเร็จ
+        res.status(200).json({ 
+            message: 'Job accepted successfully', 
+            deliveryId: parseInt(id, 10) 
+        });
+    });
+};
+
 module.exports = {
     createDelivery,
     getSentDeliveries,
-    getReceivedDeliveries
+    getReceivedDeliveries,
+    getAvailableDeliveries,
+    acceptDelivery
 };

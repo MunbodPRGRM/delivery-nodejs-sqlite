@@ -4,7 +4,11 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const createDelivery = require('../controllers/deliveryController'); // เราจะสร้างไฟล์นี้
+const { 
+    createDelivery, 
+    getSentDeliveries, 
+    getReceivedDeliveries 
+} = require('../controllers/deliveryController'); // เราจะสร้างไฟล์นี้
 
 // 1. ตั้งค่า Multer
 const uploadsDir = path.resolve(__dirname, '..', 'uploads');
@@ -27,5 +31,8 @@ const upload = multer({ storage: storage });
 // 2. สร้าง Route
 // เราจะใช้ .single('photo_status1') โดยชื่อนี้ต้องตรงกับที่ Flutter ส่งมา
 router.post('/', upload.single('photo_status1'), createDelivery);
+
+router.get('/sent', getSentDeliveries);
+router.get('/received', getReceivedDeliveries);
 
 module.exports = router;

@@ -152,9 +152,45 @@ const getAddresses = (req, res) => {
     });
 };
 
+const findUserByPhone = (req, res) => {
+    const { phone } = req.query;
+
+    if (!phone) {
+        return res.status(400).json({ error: "กรุณาระบุหมายเลขโทรศัพท์" });
+    }
+
+    const sqlUser = `SELECT id, name, phone, profile_pic FROM users WHERE phone = ?`;
+    
+    // 1. ค้นหา User ก่อน
+    db.get(sqlUser, [phone], (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: "Database error: " + err.message });
+        }
+        if (!user) {
+            return res.status(404).json({ error: "ไม่พบผู้ใช้จากเบอร์โทรนี้" });
+        }
+
+        // 2. ถ้าเจอ User ให้ไปค้นหาที่อยู่ของ User คนนั้น
+        const sqlAddresses = `SELECT * FROM addresses WHERE user_id = ?`;
+        db.all(sqlAddresses, [user.id], (err, addresses) => {
+            if (err) {
+                return res.status(500).json({ error: "Database error finding addresses: " + err.message });
+            }
+            
+            // 3. ส่งข้อมูล User และ ที่อยู่ (Array) กลับไป
+            res.status(200).json({
+                user: user,
+                addresses: addresses
+            });
+        });
+    });
+};
+
 module.exports = {
     registerUser,
     loginUser,
     addAddress,
     getAddresses,
+    findUserByPhone,
+    
 };

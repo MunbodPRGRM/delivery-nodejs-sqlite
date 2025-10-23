@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 
-const { registerUser, loginUser, addAddress, getAddresses } = require('../controllers/userController');
+const { registerUser, loginUser, addAddress, getAddresses, findUserByPhone } = require('../controllers/userController');
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -21,5 +21,6 @@ router.post("/register", upload.single("profile_pic"), registerUser);
 router.post("/login", loginUser);
 router.post("/address", addAddress);
 router.get("/address", getAddresses);
+router.get("/find-by-phone", findUserByPhone);
 
 module.exports = router;

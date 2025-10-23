@@ -299,6 +299,48 @@ const getDeliveryDetails = (req, res) => {
     });
 };
 
+const cancelDelivery = (req, res) => {
+    const { id } = req.params; // Delivery ID
+    const { riderId } = req.body; // Rider ID ที่ขอยกเลิก
+
+    if (!riderId) {
+        return res.status(400).json({ error: 'Missing riderId' });
+    }
+
+    // --- ตรวจสอบสถานะก่อนยกเลิก (Optional แต่แนะนำ) ---
+    // อนุญาตให้ยกเลิกได้เฉพาะตอน status = 2 (เพิ่งรับงาน ยังไม่ได้รับของ)
+    const checkStatusSql = `SELECT status, rider_id FROM deliveries WHERE id = ?`;
+    db.get(checkStatusSql, [parseInt(id, 10)], (err, row) => {
+        if (err) return res.status(500).json({ error: 'DB Error checking status: ' + err.message });
+        if (!row) return res.status(404).json({ error: 'Delivery not found' });
+        if (row.rider_id !== parseInt(riderId, 10)) {
+             return res.status(403).json({ error: 'You are not assigned to this delivery' });
+        }
+        // ❗️ เงื่อนไข: อนุญาตให้ยกเลิกเฉพาะ Status 2
+        if (row.status !== 2) {
+             return res.status(400).json({ error: 'Cannot cancel delivery at current status' });
+        }
+
+        // --- ถ้ายกเลิกได้: อัปเดต DB ---
+        // เปลี่ยน status กลับเป็น 1 (รอไรเดอร์) และเอา rider_id ออก
+        const updateSql = `
+            UPDATE deliveries
+            SET status = 1, rider_id = NULL
+            WHERE id = ? AND rider_id = ? AND status = 2
+        `;
+
+        db.run(updateSql, [parseInt(id, 10), parseInt(riderId, 10)], function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'DB Error cancelling delivery: ' + err.message });
+            }
+            if (this.changes === 0) {
+                 return res.status(400).json({ error: 'Cancel failed, status might have changed' });
+            }
+            res.status(200).json({ message: 'Delivery cancelled successfully' });
+        });
+    });
+};
+
 module.exports = {
     createDelivery,
     getSentDeliveries,
@@ -306,5 +348,6 @@ module.exports = {
     getAvailableDeliveries,
     acceptDelivery, 
     updateDeliveryStatus,
-    getDeliveryDetails
+    getDeliveryDetails,
+    cancelDelivery
 };

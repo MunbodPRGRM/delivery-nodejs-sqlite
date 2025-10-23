@@ -143,10 +143,168 @@ const acceptDelivery = (req, res) => {
     });
 };
 
+const updateDeliveryStatus = async (req, res) => {
+    const { id } = req.params; // Delivery ID
+    const { newStatus, riderId, latitude, longitude } = req.body; // ข้อมูลที่ส่งมา
+    const photoFile = req.file; // ไฟล์รูปที่อัปโหลด
+
+    // ตรวจสอบข้อมูลเบื้องต้น
+    if (!newStatus || !riderId || latitude === undefined || longitude === undefined) {
+        return res.status(400).json({ error: 'Missing required fields (newStatus, riderId, latitude, longitude)' });
+    }
+    if (newStatus !== '3' && newStatus !== '4') {
+        return res.status(400).json({ error: 'Invalid newStatus (must be 3 or 4)' });
+    }
+    if (!photoFile && (newStatus === '3' || newStatus === '4')) {
+        return res.status(400).json({ error: 'Missing photo for status 3 or 4' });
+    }
+
+    const deliveryIdInt = parseInt(id, 10);
+    const riderIdInt = parseInt(riderId, 10);
+    const riderLat = parseFloat(latitude);
+    const riderLng = parseFloat(longitude);
+
+    try {
+        // --- ดึงข้อมูล Delivery ปัจจุบัน และพิกัดจุดรับ/ส่ง ---
+        const deliveryDetails = await getDeliveryLocationDetails(deliveryIdInt);
+        if (!deliveryDetails) {
+            return res.status(404).json({ error: 'Delivery not found' });
+        }
+
+        // --- ตรวจสอบสถานะปัจจุบัน ---
+        if (newStatus === '3' && deliveryDetails.status !== 2) {
+             return res.status(400).json({ error: 'Cannot update to status 3 from current status' });
+        }
+        if (newStatus === '4' && deliveryDetails.status !== 3) {
+             return res.status(400).json({ error: 'Cannot update to status 4 from current status' });
+        }
+        
+        // --- ตรวจสอบระยะทาง 20 เมตร ---
+        let targetLat, targetLng;
+        if (newStatus === '3') { // กำลังจะรับของ -> เช็คระยะจาก "จุดรับ"
+            targetLat = deliveryDetails.sender_latitude;
+            targetLng = deliveryDetails.sender_longitude;
+        } else { // newStatus === '4' กำลังจะส่งของ -> เช็คระยะจาก "จุดส่ง"
+            targetLat = deliveryDetails.receiver_latitude;
+            targetLng = deliveryDetails.receiver_longitude;
+        }
+
+        if (targetLat == null || targetLng == null) {
+            return res.status(500).json({ error: 'Missing location data for validation' });
+        }
+
+        const distance = getDistance(
+            { latitude: riderLat, longitude: riderLng },
+            { latitude: targetLat, longitude: targetLng }
+        );
+
+        if (distance > 20) { // ถ้าเกิน 20 เมตร
+             return res.status(400).json({ error: `You must be within 20 meters of the location (Current distance: ${distance}m)` });
+        }
+        
+        // --- ถ้าผ่านหมด: อัปเดตฐานข้อมูล ---
+        let photoColumn, photoValue;
+        if (newStatus === '3') {
+            photoColumn = 'photo_status3';
+            photoValue = photoFile.filename;
+        } else { // newStatus === '4'
+            photoColumn = 'photo_status4';
+            photoValue = photoFile.filename;
+        }
+
+        const sqlUpdate = `
+            UPDATE deliveries 
+            SET status = ?, ${photoColumn} = ?
+            WHERE id = ? AND rider_id = ? 
+        `; // (เช็ค rider_id ด้วยเพื่อความปลอดภัย)
+
+        db.run(sqlUpdate, [parseInt(newStatus, 10), photoValue, deliveryIdInt, riderIdInt], function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Database update error: ' + err.message });
+            }
+            if (this.changes === 0) {
+                 return res.status(400).json({ error: 'Update failed, possibly wrong rider or delivery ID' });
+            }
+            
+            // ส่งข้อมูลสำเร็จกลับไป
+            res.status(200).json({ 
+                message: `Status updated to ${newStatus} successfully`,
+                deliveryId: deliveryIdInt,
+                [photoColumn]: photoValue // ส่งชื่อไฟล์รูปกลับไปด้วย
+            });
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+function getDeliveryLocationDetails(deliveryId) {
+    return new Promise((resolve, reject) => {
+        // JOIN 3 ตาราง: deliveries, addresses (จุดส่ง), addresses (จุดรับ - ต้องหาจาก sender_id)
+         const sql = `
+            SELECT 
+                d.status,
+                sender_addr.latitude as sender_latitude, 
+                sender_addr.longitude as sender_longitude,
+                receiver_addr.latitude as receiver_latitude, 
+                receiver_addr.longitude as receiver_longitude
+            FROM deliveries d
+            JOIN addresses receiver_addr ON d.receiver_address_id = receiver_addr.id
+            JOIN users sender ON d.sender_id = sender.id
+            LEFT JOIN addresses sender_addr ON sender.id = sender_addr.user_id -- (อาจต้องปรับปรุงถ้า sender มีหลายที่อยู่)
+            WHERE d.id = ? 
+            LIMIT 1 -- (เพื่อให้ได้จุดรับแค่จุดเดียว - ต้องปรับปรุง Logic ถ้า sender มีหลายที่อยู่)
+        `;
+        db.get(sql, [deliveryId], (err, row) => {
+            if (err) return reject(new Error('DB Error: ' + err.message));
+            resolve(row);
+        });
+    });
+}
+
+const getDeliveryDetails = (req, res) => {
+    const { id } = req.params;
+    const deliveryIdInt = parseInt(id, 10);
+
+     const sql = `
+        SELECT 
+            d.id, d.status, d.item_description,
+            d.photo_status1, d.photo_status3, d.photo_status4,
+            sender.name as sender_name, sender.phone as sender_phone,
+            receiver.name as receiver_name, receiver.phone as receiver_phone,
+            sender_addr.address as sender_address_text,
+            sender_addr.latitude as sender_latitude, 
+            sender_addr.longitude as sender_longitude,
+            receiver_addr.address as receiver_address_text,
+            receiver_addr.latitude as receiver_latitude, 
+            receiver_addr.longitude as receiver_longitude,
+            r.id as rider_id, r.name as rider_name, r.phone as rider_phone,
+            r.profile_pic as rider_profile_pic, r.vehicle_pic as rider_vehicle_pic,
+            r.plate_number as rider_plate_number
+        FROM deliveries d
+        JOIN users sender ON d.sender_id = sender.id
+        JOIN users receiver ON d.receiver_id = receiver.id
+        JOIN addresses receiver_addr ON d.receiver_address_id = receiver_addr.id
+        LEFT JOIN addresses sender_addr ON sender.id = sender_addr.user_id -- (ต้องปรับปรุงถ้า sender มีหลายที่อยู่)
+        LEFT JOIN riders r ON d.rider_id = r.id
+        WHERE d.id = ?
+        LIMIT 1 -- (ต้องปรับปรุงถ้า sender มีหลายที่อยู่)
+    `;
+
+    db.get(sql, [deliveryIdInt], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Delivery not found' });
+        res.status(200).json(row);
+    });
+};
+
 module.exports = {
     createDelivery,
     getSentDeliveries,
     getReceivedDeliveries,
     getAvailableDeliveries,
-    acceptDelivery
+    acceptDelivery, 
+    updateDeliveryStatus,
+    getDeliveryDetails
 };

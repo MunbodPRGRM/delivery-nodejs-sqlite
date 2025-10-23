@@ -9,7 +9,8 @@ const {
     getSentDeliveries, 
     getReceivedDeliveries, 
     getAvailableDeliveries,
-    acceptDelivery
+    acceptDelivery, 
+    updateDeliveryStatus
 } = require('../controllers/deliveryController'); // เราจะสร้างไฟล์นี้
 
 // 1. ตั้งค่า Multer
@@ -39,5 +40,6 @@ router.get('/received', getReceivedDeliveries);
 
 router.get('/available', getAvailableDeliveries);
 router.post('/:id/accept', acceptDelivery);
+router.post('/:id/update-status', upload.single('photo'), updateDeliveryStatus);
 
 module.exports = router;
